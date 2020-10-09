@@ -6,7 +6,7 @@
 #include <string.h>
 #include <stdarg.h>
 
-#define MAX_NUM 100000 // Test value is 5
+#define MAX_NUM 1000000 // Test value is 5
 #define END_EXEC 0xffffff00
 
 #define MEM_ALLOC_FAIL 1
