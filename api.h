@@ -6,7 +6,7 @@
 #include <string.h>
 #include <stdarg.h>
 
-#define MAX_NUM 1000000 // Test value is 5
+#define MAX_NUM 100000 // Test value is 5
 #define END_EXEC 0xffffff00
 
 #define MEM_ALLOC_FAIL 1
@@ -83,6 +83,7 @@ int disassemble(edit_list *init,task *exec);
 void link(task *final);
 task *read_from_file(char *name);
 int write_to_file(char *name,task *data);
+task *run_task(task *exec,int answer);
 void safe_check(task *exec,unsigned int number,int cmpl);
 
 int edit_task(edit_list *init,int cmd,...);
