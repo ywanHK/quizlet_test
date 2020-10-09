@@ -209,33 +209,3 @@ void safe_check(task *exec,unsigned int number,int cmpl){
 
 // Debug test bellow
 
-
-
-/*
-// turn linked list to array
-compile
-
-// turn array to linked list
-decompile
-
-// number link all questions
-link
-
-// write compiled (not necessarily linked) task to file
-write_to_file
-
-// extract task from file
-read_from_file
-
-// insert questions & answer choices to node
-edit_task
-
-// run
-run_task
-
-// called from some external program
-run_task_gui
-
-
-link = 0 always means move to the next question
-*/
