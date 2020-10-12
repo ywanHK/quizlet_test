@@ -1,6 +1,9 @@
 
 from ctypes import *
 
+MAX_NUM = 1000000
+END_EXEC = 0xffffff00
+
 MEM_ALLOC_FAIL = 1
 MAX_EXCEEDED = 2
 INVALID_INDEX = 3
@@ -45,42 +48,87 @@ class task_t(Structure):
 class edt(Structure):
 	pass
 edt._fields_ = [("data",task_t),("next",POINTER(edt))]
+
+
 api = cdll.LoadLibrary("core.dll")
+api.seek.restype = POINTER(edt)
+api.search_all.restype = POINTER(POINTER(edt))
+api.search_in.restype = POINTER(POINTER(edt))
+api.search.restype = POINTER(c_char)
+api.run_task.restype = POINTER(task_t)
 
 
-def initialize_project(title="",file=""):
-	ls = []
-	ls.append(edt())
-	ls.append(pointer(ls[0]))
-	if file=="":
-		if title=="":
-			pass
+
+class start_project:
+	def __init__(self,title="",file=""):
+		self.initial = edt()
+		self.handler = pointer(self.initial)
+		if file=="":
+			if title=="":
+				pass
+			else:
+				self.initial.question = title.encode()
 		else:
-			ls[0].data.question = title.encode(encoding="utf-8")
-	else:
-		api.edit_task(ls[1],C_READ,file.encode(encoding="utf-8"),0)
-	return ls
+			api.edit_task(self.handler,C_READ,file.encode(),0)
+	def count(self):
+		return api.count(self.handler)
+	def seek(self,index,mode="data"):
+		r = api.seek(self.handler,index)
+		if mode=="data":
+			return r.contents.data
+		return r.contents
+	def insert(self,question,index):
+		q = question.encode()
+		return api.edit_task(self.handler,C_INSERT,q,index)
+	def edit(self,question,index):
+		q = question.encode()
+		return api.edit_task(self.handler,C_EDIT,q,index)
+	def delete(self,index):
+		return api.edit_task(self.handler,C_DELETE,index)
+	def delete_all(self):
+		return api.edit_task(self.handler,C_DELETE_ALL)
+	def insert_choice(self,choice,index,pos,link=0):
+		ptr = pointer(answer_t())
+		ptr.contents.choice = choice.encode()
+		ptr.contents.link = link
+		return api.edit_task(self.handler,C_INSERT_CHOICE,ptr,index,pos)
+	def edit_choice(self,choice,index,pos,link=0):
+		ptr = pointer(answer_t())
+		ptr.contents.choice = choice.encode()
+		ptr.contents.link = link
+		return api.edit_task(self.handler,C_EDIT_CHOICE,ptr,index,pos)
+	def delete_choice(self,index,pos):
+		return api.edit_task(self.handler,C_DELETE_CHOICE,index,pos)
 
-def iterate_question(ptr):
-	offset = ptr.contents.next
-	while offset:
-		print(offset.contents.data.question.decode(encoding="utf-8"))
-		print()
-		offset = offset.contents.next
+	def search_all(self,mt,option):
+		match = mt.encode()
+		match_list = []
+		ptr = api.search_all(self.handler,match,option)
+		i = 0
+		while ptr[i]:
+			match_list.append(ptr[i])
+			i += 1
+		return match_list
+	def search_range(self,mt,option,start,end):
+		match = mt.encode()
+		match_list = []
+		ptr = api.search_in(self.handler,match,option,start,end)
+		i = 0
+		while ptr[i]:
+			match_list.append(ptr[i])
+			i += 1
+		return match_list
+	def search_in(self,match,index,option):
+		node = api.seek(self.handler,index)
+		return api.search(node,match,option)
+
+	def save(self,file,link=0):
+		if file=="":
+			return 1
+		f = file.encode()
+		return api.edit_task(self.handler,C_WRITE,f,link)
 
 
 
-project = initialize_project(file="b.gt")
 
-iterate_question(project[1])
-print(api.count(project[1]))
-
-project[1].contents.data.question = b"This is a title"
-
-api.edit_task(project[1],C_INSERT,b"Question 1: what is this question?",0)
-api.edit_task(project[1],C_INSERT,b"Question 2: wtf?",0)
-api.edit_task(project[1],C_INSERT,b"Question 3: did you answer the previous question?",0)
-api.edit_task(project[1],C_INSERT,b"Question 4: what is the first question?",0)
-api.edit_task(project[1],C_INSERT,b"Question 5: did you get it all?",0)
-
-api.edit_task(project[1],C_WRITE,b"asdf.gt",0)
+# DEBUG test below
