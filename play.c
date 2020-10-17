@@ -40,18 +40,37 @@ int disassemble(edit_list *init,task *exec){
 	return 0;
 }
 void link(task *final){
-	unsigned int num,num_choice,lnk;
-	unsigned int counter = final[0].number;
-	num = counter<=MAX_NUM?counter:MAX_NUM;
-	for(unsigned int i=1;i<=num;i++){
-		num_choice = final[i].number & 7;
-		for(int j=0;j<num_choice;j++){
-			lnk = final[i].choices[j].link;
-			final[i].number = num_choice;
-			if(lnk<=counter||lnk==END_EXEC){
-				continue;
+	// This function is not yet tested
+	unsigned int counter,num_choice,lnk;
+	unsigned int num = final[0].number;
+	counter = num<=MAX_NUM?num:MAX_NUM;
+	for(int i=1;i<=counter;i++){
+		if(final[i].type==FILL_BLANK){
+			final[i].number = 0;
+			lnk = final[i].answer.keyword.correct;
+			if(!(lnk<=counter||lnk==END_EXEC)){
+				final[i].answer.keyword.correct = 0;
 			}
-			final[i].choices[j].link = 0;
+			lnk = final[i].answer.keyword.incorrect;
+			if(!(lnk<=counter||lnk==END_EXEC)){
+				final[i].answer.keyword.incorrect = 0;
+			}
+		}
+		else if(final[i].type==MULTIPLE_CHOICE){
+			num_choice = final[i].number & 7;
+			for(int j=0;j<num_choice;j++){
+				lnk = final[i].answer.choices[j].link;
+				final[i].number = num_choice;
+				if(lnk<=counter||lnk==END_EXEC){
+					continue;
+				}
+				final[i].answer.choices[j].link = 0;
+			}
+			final[i].number = num_choice;
+		}
+		else{
+			final[i].type = FILL_BLANK;
+			memset(&final[i].answer,0,sizeof(final[i].answer));
 		}
 	}
 }
@@ -64,7 +83,7 @@ task *read_from_file(char *name){
 	if(!fp)
 		goto ret;
 	tmp = fsize(fp);
-	size = tmp<=MAX_NUM*dt_size?tmp:MAX_NUM*dt_size;
+	size = tmp<=(MAX_NUM+1)*dt_size?tmp:(MAX_NUM+1)*dt_size;
 	size = size - size%dt_size;
 	if(size<dt_size)
 		goto err;
@@ -105,7 +124,7 @@ int edit_task(edit_list *init,int cmd,...){
 			data = va_arg(valist,unsigned char*);
 			q_index = va_arg(valist,unsigned int);
 			strncpy((char*)task.question,data,2303);
-			status = insert(init,q_index,task);
+			status = insert(init,q_index,task,va_arg(valist,int));
 			break;
 		}
 		case _DELETE:{
@@ -127,6 +146,16 @@ int edit_task(edit_list *init,int cmd,...){
 				strncpy((char*)offset->data.question,data,2303);
 			break;
 		}
+		case _EDIT_ANSWER:{
+			data = va_arg(valist,keywd*);
+			q_index = va_arg(valist,unsigned int);
+			offset = seek(init,q_index);
+			if(!offset)
+				status = INVALID_INDEX;
+			else
+				status = edit_answer(&(offset->data),data);
+			break;
+		}
 		case _EDIT_CHOICE:
 		case _DELETE_CHOICE:
 		case _INSERT_CHOICE:{
@@ -140,6 +169,11 @@ int edit_task(edit_list *init,int cmd,...){
 				status = INVALID_INDEX;
 			else
 				status = edit_choice(&(offset->data),data,c_index,cmd);
+			break;
+		}
+		case _CHANGE_TYPE:{
+			offset = seek(init,va_arg(valist,unsigned int));
+			status = change_type(&(offset->data),va_arg(valist,int));
 			break;
 		}
 		case _READ:{
@@ -177,19 +211,27 @@ int edit_task(edit_list *init,int cmd,...){
 	va_end(valist);
 	return status;
 }
-task *run_task(task *exec,int answer){
+unsigned int run_task(task *exec,unsigned int position,...){
 	// This function is not yet tested
-	unsigned int next;
-	task *ptr = exec;
-	next = exec->choices[answer].link;
-	link(exec);
-	if(!next)
-		ptr = exec + sizeof(task);
-	else if(next==END_EXEC)
-		ptr = NULL; // Task ends
-	else
-		ptr = exec + next*sizeof(task);
-	return ptr;
+	va_list valist;
+	unsigned int next,answer;
+	unsigned char type = exec[position].type,*keyword;
+	va_start(valist,position);
+	if(type==MULTIPLE_CHOICE){
+		answer = va_arg(valist,unsigned int);
+		next = exec[position].answer.choices[answer].link;
+	}
+	else{
+		keyword = va_arg(valist,unsigned char*);
+		if(!strstr((char*)keyword,(char*)exec[position].answer.keyword.word)){
+			next = exec[position].answer.keyword.incorrect;
+		}
+		else{
+			next = exec[position].answer.keyword.correct;
+		}
+	}
+	va_end(valist);
+	return next;
 }
 void safe_check(task *exec,unsigned int number,int cmpl){
 	unsigned int i;
@@ -198,9 +240,15 @@ void safe_check(task *exec,unsigned int number,int cmpl){
 	}
 	for(i=1;i<=number;i++){
 		exec[i].question[2303] = 0x00;
-		exec[i].number = exec[i].number & 7;
-		for(int j=0;j<exec[i].number;j++){
-			exec[i].choices[j].choice[249] = 0x00;
+		if(exec[i].type==MULTIPLE_CHOICE){
+			exec[i].number = exec[i].number & 7;
+			for(int j=0;j<exec[i].number;j++){
+				exec[i].answer.choices[j].choice[249] = 0x00;
+			}
+		}
+		else{
+			exec[i].number = 0;
+			exec[i].answer.keyword.word[1783] = 0x00;
 		}
 	}
 }
@@ -208,4 +256,3 @@ void safe_check(task *exec,unsigned int number,int cmpl){
 
 
 // Debug test bellow
-
