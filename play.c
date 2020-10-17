@@ -44,7 +44,7 @@ void link(task *final){
 	unsigned int counter,num_choice,lnk;
 	unsigned int num = final[0].number;
 	counter = num<=MAX_NUM?num:MAX_NUM;
-	for(int i=1;i<=counter;i++){
+	for(unsigned int i=1;i<=counter;i++){
 		if(final[i].type==FILL_BLANK){
 			final[i].number = 0;
 			lnk = final[i].answer.keyword.correct;
