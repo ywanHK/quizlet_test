@@ -14,7 +14,7 @@ unsigned int count(edit_list *init){
 	}
 	return number;
 }
-int insert(edit_list *init,unsigned int index,task question){
+int insert(edit_list *init,unsigned int index,task question,char type){
 	edit_list *offset_this=init,*offset_next=NULL;
 	edit_list *new=NULL;
 	int counter;
@@ -22,8 +22,9 @@ int insert(edit_list *init,unsigned int index,task question){
 		counter = 1;
 		while(offset_this->next){
 			counter++;
-			if(counter>MAX_NUM)
+			if(counter>MAX_NUM){
 				return MAX_EXCEEDED;
+			}
 			offset_this = offset_this->next;
 		}
 		new = (edit_list*)calloc(1,sizeof(edit_list));
@@ -31,14 +32,17 @@ int insert(edit_list *init,unsigned int index,task question){
 			return MEM_ALLOC_FAIL;
 		new->next = NULL;
 		new->data = question;
+		new->data.type = type;
 		offset_this->next = new;
 	}
 	else{
 		counter = count(init);
-		if(counter<index)
+		if(counter<index){
 			return INVALID_INDEX;
-		else if(counter>=MAX_NUM)
+		}
+		else if(counter>=MAX_NUM){
 			return MAX_EXCEEDED;
+		}
 		counter = 1;
 		offset_next = init->next;
 		while(counter<index){
@@ -51,6 +55,7 @@ int insert(edit_list *init,unsigned int index,task question){
 			return MEM_ALLOC_FAIL;
 		new->next = offset_next;
 		new->data = question;
+		new->data.type = type;
 		offset_this->next = new;
 	}
 	init->data.number++;
@@ -60,7 +65,9 @@ int delete(edit_list *init,unsigned int index){
 	edit_list *offset_this=NULL;
 	edit_list *offset_next=init;
 	int counter = count(init);
-	if(!counter)return DEL_EMPTY_SET;
+	if(!counter){
+		return DEL_EMPTY_SET;
+	}
 	if(index==0){
 		for(int i=0;i<counter;i++){
 			offset_this = offset_next;
@@ -128,11 +135,39 @@ edit_list *seek(edit_list *init,unsigned int index){
 	}
 	return offset_this;
 }
+int change_type(task *node,unsigned char type){
+	if(!node)return 1;
+	if(type!=MULTIPLE_CHOICE&&type!=FILL_BLANK){
+		return INVALID_TYPE;
+	}
+	else if(node->type==type);
+	else{
+		node->type = type;
+		node->number = 0;
+		memset(&node->answer,0,sizeof(node->answer));
+	}
+	return 0;
+}
+int edit_answer(task *node,keywd *ans){
+	if(!node)return 1;
+	if(node->type!=FILL_BLANK){
+		return INVALID_TYPE;
+	}
+	else{
+		memset(node->answer.keyword.word,0,1784);
+		strncpy((char*)node->answer.keyword.word,(char*)ans->word,1783);
+		node->answer.keyword.correct = ans->correct;
+		node->answer.keyword.incorrect = ans->incorrect;
+		return 0;
+	}
+}
 int edit_choice(task *node,answer *data,int index,int cmd){
 	int number = node->number;
 	int status = 0;
-	if(index>7||index>number)
+	if(index>7||index>number||index<0)
 		return INVALID_INDEX;
+	else if(node->type!=MULTIPLE_CHOICE)
+		return INVALID_TYPE;
 	switch(cmd){
 		case _INSERT_CHOICE:{
 			if(number>=7){
@@ -141,12 +176,12 @@ int edit_choice(task *node,answer *data,int index,int cmd){
 				break;
 			}
 			if(!index)
-				node->choices[number] = *data;
+				node->answer.choices[number] = *data;
 			else{
 				for(int i=number;i>=index;i--){
-					node->choices[i] = node->choices[i-1];
+					node->answer.choices[i] = node->answer.choices[i-1];
 				}
-				node->choices[index-1] = *data;
+				node->answer.choices[index-1] = *data;
 			}
 			node->number++;
 			break;
@@ -161,18 +196,18 @@ int edit_choice(task *node,answer *data,int index,int cmd){
 			else{
 				node->number--;
 				if(!index)
-					memset(&node->choices[number-1],0,sizeof(answer));
+					memset(&node->answer.choices[number-1],0,sizeof(answer));
 				else{
 					for(int i=index;i<=number;i++){
-						node->choices[i-1] = node->choices[i];
+						node->answer.choices[i-1] = node->answer.choices[i];
 					}
-					memset(&node->choices[number-1],0,sizeof(answer));
+					memset(&node->answer.choices[number-1],0,sizeof(answer));
 				}
 			}
 			break;
 		}
 		case _EDIT_CHOICE:{
-			if(!number){
+			if(!number||!index){
 				status = INVALID_INDEX;
 				break;
 			}
@@ -181,7 +216,7 @@ int edit_choice(task *node,answer *data,int index,int cmd){
 				node->number = 7;
 				break;
 			}
-			node->choices[index-1] = *data;
+			node->answer.choices[index-1] = *data;
 			break;
 		}
 		default:
@@ -190,8 +225,13 @@ int edit_choice(task *node,answer *data,int index,int cmd){
 	}
 	return status;
 }
+#define ADD(a,b,c,d)\
+	a[b] = c;\
+	a = realloc(a,(b+2)*d);\
+	a[b+1] = NULL;\
+	b++;
 edit_list **search_all(edit_list *init,char *match,int option){
-	edit_list **indeces = NULL,*offset = NULL;
+	edit_list **indeces = NULL,*offset = NULL,*limit = NULL;
 	unsigned int counter = 0,i;
 	size_t size = sizeof(edit_list*);
 	indeces = calloc(2,size);
@@ -199,28 +239,31 @@ edit_list **search_all(edit_list *init,char *match,int option){
 		free(indeces);
 		return NULL;
 	}
+	limit = seek(init,0);
+	limit = !limit?limit:limit->next;
 	offset = init->next;
 	switch(option){
 		case _search_all_question:{
-			while(offset){
+			while(offset&&offset!=limit){
 				if(strstr((char*)offset->data.question,match)){
-					indeces[counter] = offset;
-					indeces = realloc(indeces,(counter+2)*size);
-					indeces[counter+1] = NULL;
-					counter++;
+					ADD(indeces,counter,offset,size);
 				}
 				offset = offset->next;
 			}
 			break;
 		}
 		case _search_all_answer:{
-			while(offset){
+			while(offset&&offset!=limit){
+				if(offset->data.type==FILL_BLANK){
+					if(strstr((char*)offset->data.answer.keyword.word,match)){
+						ADD(indeces,counter,offset,size);
+					}
+					offset = offset->next;
+					continue;
+				}
 				for(i=0;i<offset->data.number;i++){
-					if(strstr((char*)offset->data.choices[i].choice,match)){
-						indeces[counter] = offset;
-						indeces = realloc(indeces,(counter+2)*size);
-						indeces[counter+1] = NULL;
-						counter++;
+					if(strstr((char*)offset->data.answer.choices[i].choice,match)){
+						ADD(indeces,counter,offset,size);
 						break;
 					}
 				}
@@ -229,20 +272,21 @@ edit_list **search_all(edit_list *init,char *match,int option){
 			break;
 		}
 		case _search_all:{
-			while(offset){
+			while(offset&&offset!=limit){
 				if(strstr((char*)offset->data.question,match)){
-					indeces[counter] = offset;
-					indeces = realloc(indeces,(counter+2)*size);
-					indeces[counter+1] = NULL;
-					counter++;
+					ADD(indeces,counter,offset,size);
 				}
 				else{
+					if(offset->data.type==FILL_BLANK){
+						if(strstr((char*)offset->data.answer.keyword.word,match)){
+							ADD(indeces,counter,offset,size);
+						}
+						offset = offset->next;
+						continue;
+					}
 					for(i=0;i<offset->data.number;i++){
-						if(strstr((char*)offset->data.choices[i].choice,match)){
-							indeces[counter] = offset;
-							indeces = realloc(indeces,(counter+2)*size);
-							indeces[counter+1] = NULL;
-							counter++;
+						if(strstr((char*)offset->data.answer.choices[i].choice,match)){
+							ADD(indeces,counter,offset,size);
 							break;
 						}
 					}
@@ -269,7 +313,7 @@ edit_list **search_in(edit_list *init,
 	indeces = calloc(2,size);
 	ptr_start = seek(init,start);
 	ptr_end = seek(init,end);
-	if(!ptr_start||!ptr_end||!indeces){
+	if(!ptr_start||!ptr_end||!indeces||(start>end&&end)){
 		free(indeces);
 		return NULL;
 	}
@@ -279,10 +323,7 @@ edit_list **search_in(edit_list *init,
 		case _search_in_range_question:{
 			while(offset!=ptr_end){
 				if(strstr((char*)offset->data.question,match)){
-					indeces[counter] = offset;
-					indeces = realloc(indeces,(counter+2)*size);
-					indeces[counter+1] = NULL;
-					counter++;
+					ADD(indeces,counter,offset,size);
 				}
 				offset = offset->next;
 			}
@@ -290,12 +331,16 @@ edit_list **search_in(edit_list *init,
 		}
 		case _search_in_range_answer:{
 			while(offset!=ptr_end){
+				if(offset->data.type==FILL_BLANK){
+					if(strstr((char*)offset->data.answer.keyword.word,match)){
+						ADD(indeces,counter,offset,size);
+					}
+					offset = offset->next;
+					continue;
+				}
 				for(i=0;i<offset->data.number;i++){
-					if(strstr((char*)offset->data.choices[i].choice,match)){
-						indeces[counter] = offset;
-						indeces = realloc(indeces,(counter+2)*size);
-						indeces[counter+1] = NULL;
-						counter++;
+					if(strstr((char*)offset->data.answer.choices[i].choice,match)){
+						ADD(indeces,counter,offset,size);
 						break;
 					}
 				}
@@ -306,18 +351,19 @@ edit_list **search_in(edit_list *init,
 		case _search_in_range_all:{
 			while(offset!=ptr_end){
 				if(strstr((char*)offset->data.question,match)){
-					indeces[counter] = offset;
-					indeces = realloc(indeces,(counter+2)*size);
-					indeces[counter+1] = NULL;
-					counter++;
+					ADD(indeces,counter,offset,size);
 				}
 				else{
+					if(offset->data.type==FILL_BLANK){
+						if(strstr((char*)offset->data.answer.keyword.word,match)){
+							ADD(indeces,counter,offset,size);
+						}
+						offset = offset->next;
+						continue;
+					}
 					for(i=0;i<offset->data.number;i++){
-						if(strstr((char*)offset->data.choices[i].choice,match)){
-							indeces[counter] = offset;
-							indeces = realloc(indeces,(counter+2)*size);
-							indeces[counter+1] = NULL;
-							counter++;
+						if(strstr((char*)offset->data.answer.choices[i].choice,match)){
+							ADD(indeces,counter,offset,size);
 							break;
 						}
 					}
@@ -342,8 +388,12 @@ char *search(edit_list *node,char *match,int option){
 			break;
 		}
 		case _search_answer_only:{
+			if(node->data.type==FILL_BLANK){
+				ptr = strstr((char*)node->data.answer.keyword.word,match);
+				break;
+			}
 			for(int i=0;i<node->data.number;i++){
-				ptr = strstr((char*)node->data.choices[i].choice,match);
+				ptr = strstr((char*)node->data.answer.choices[i].choice,match);
 				if(ptr)
 					break;
 			}
@@ -355,8 +405,12 @@ char *search(edit_list *node,char *match,int option){
 				break;
 			}
 			else{
+				if(node->data.type==FILL_BLANK){
+					ptr = strstr((char*)node->data.answer.keyword.word,match);
+					break;
+				}
 				for(int i=0;i<node->data.number;i++){
-					ptr = strstr((char*)node->data.choices[i].choice,match);
+					ptr = strstr((char*)node->data.answer.choices[i].choice,match);
 					if(ptr)
 						break;
 				}
@@ -368,6 +422,8 @@ char *search(edit_list *node,char *match,int option){
 	}
 	ret:return ptr;
 }
+#undef ADD
+
 
 
 // Debug test bellow
