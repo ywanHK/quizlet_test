@@ -74,6 +74,23 @@ void link(task *final){
 		}
 	}
 }
+char *get_filename_ext(char *filename){
+	char *dot = strrchr(filename,'.');
+	if(!dot||dot == filename)return "";
+	return dot + 1;
+}
+char *name_file(char *filename){
+	char *name,*extension;
+	extension = get_filename_ext(filename);
+	name = malloc(strlen(filename)+4);
+	if(!name)
+		return NULL;
+	else if(!strcmp("gt",extension))
+		strcpy(name,filename);
+	else
+		sprintf(name,"%s.gt",filename);
+	return name;
+}
 task *read_from_file(char *name){
 	FILE *fp = NULL;
 	task *buf = NULL;
@@ -103,9 +120,15 @@ task *read_from_file(char *name){
 int write_to_file(char *name,task *data){
 	FILE *fp = NULL;
 	int number;
-	fp = fopen(name,"wb+");
-	if(!fp)
+	char *filename = name_file(name);
+	if(!filename){
 		return 1;
+	}
+	fp = fopen(filename,"wb+");
+	free(filename);
+	if(!fp){
+		return 1;
+	}
 	number = data[0].number+1;
 	fwrite(data,1,number*sizeof(task),fp);
 	fclose(fp);
@@ -229,6 +252,9 @@ unsigned int run_task(task *exec,unsigned int position,...){
 		else{
 			next = exec[position].answer.keyword.correct;
 		}
+	}
+	if(!next){
+		next = position + 1;
 	}
 	va_end(valist);
 	return next;
