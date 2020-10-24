@@ -97,6 +97,8 @@ typedef enum search_t search_cmd;
 unsigned int assemble(edit_list *init,task *exec);
 int disassemble(edit_list *init,task *exec);
 void link(task *final);
+char *get_filename_ext(char *filename);
+char *name_file(char *filename);
 task *read_from_file(char *name);
 int write_to_file(char *name,task *data);
 unsigned int run_task(task *exec,unsigned int position,...);
@@ -105,7 +107,6 @@ void safe_check(task *exec,unsigned int number,int cmpl);
 int edit_task(edit_list *init,int cmd,...);
 
 #endif
-
 
 
 
