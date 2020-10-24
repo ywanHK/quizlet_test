@@ -72,7 +72,7 @@ api.search_all.restype = POINTER(POINTER(edt))
 api.search_in.restype = POINTER(POINTER(edt))
 api.search.restype = POINTER(c_char)
 
-class project:
+class project_form:
 	def __init__(self,description="",file="",default=FILL_BLANK):
 		self.initial = edt()
 		self.handler = pointer(self.initial)
@@ -107,34 +107,65 @@ class project:
 		return api.edit_task(self.handler,C_DELETE,index)
 	def delete_all(self):
 		return api.edit_task(self.handler,C_DELETE_ALL)
-
-
 	def insert_choice(self,choice,index,pos,link=0):
 		ptr = pointer(answer())
 		ptr.contents.choice = choice.encode()
 		ptr.contents.link = link
 		return api.edit_task(self.handler,C_INSERT_CHOICE,ptr,index,pos)
-	def edit_choice(self,choice,index,pos,link=0):
+
+
+
+
+	def edit_choice(self,index,position,choice=None,link=-1):
 		ptr = pointer(answer())
-		ptr.contents.choice = choice.encode()
-		ptr.contents.link = link
-		return api.edit_task(self.handler,C_EDIT_CHOICE,ptr,index,pos)
+		original = api.seek(self.handler,index).contents.data
+		if original.type != MULTIPLE_CHOICE:
+			return INVALID_TYPE
+		if choice is not None:
+			ptr.contents.choice = choice.encode()
+		else:
+			choice = original.answer.choices[position-1].choice
+			ptr.contents.choice = choice
+		if link == -1:
+			lk = original.answer.choices[position-1].link
+			ptr.contents.link = lk
+		else:
+			ptr.contents.link = link
+		return api.edit_task(self.handler,C_EDIT_CHOICE,ptr,index,position)
+
+
+
 	def delete_choice(self,index,pos):
 		return api.edit_task(self.handler,C_DELETE_CHOICE,index,pos)
 
 
-	def edit_answer(self,keyword,index,cor=-1,incor=-1):
+
+	def edit_answer(self,index,keyword=None,cor=-1,incor=-1):
 		kw = pointer(keywd())
-		kw.contents.word = keyword.encode()
-		if cor != -1 :
+		original = api.seek(self.handler,index).contents.data
+		if original.type !=FILL_BLANK:
+			return INVALID_TYPE
+		if keyword is not None:
+			kw.contents.word = keyword.encode()
+		else:
+			w = original.answer.keyword.word
+			kw.contents.word = w
+		if cor != -1:
 			kw.contents.correct = cor
+		else:
+			c = original.answer.keyword.correct
+			kw.contents.correct = c
 		if incor != -1:
 			kw.contents.incorrect = incor
+		else:
+			i = original.answer.keyword.incorrect
+			kw.contents.incorrect = i
 		return api.edit_task(self.handler,C_EDIT_ANSWER,kw,index)
+
+
+
 	def change_type(self,tp,index):
 		return api.edit_task(self.handler,C_CHANGE_TYPE,index,tp)
-
-
 	def serach_all(self,mt,option):
 		match = mt.encode()
 		match_list = []
@@ -156,18 +187,13 @@ class project:
 	def search_in(self,match,index,option):
 		node = api.seek(self.handler,index)
 		return api.search(node,match,option)
-
-
-
-	def save(self,file,link=0):
+	def save(self,file,cmpl=0):
 		if file=="":
 			return 1
 		f = file.encode()
-		return api.edit_task(self.handler,C_WRITE,f,link)
+		return api.edit_task(self.handler,C_WRITE,f,cmpl)
 
 
-
-# Next update: allow edit links without changing the keyword
 
 
 
@@ -179,10 +205,17 @@ def iterate(data):
 		print(offset.contents.data.question.decode())
 		if offset.contents.data.type == MULTIPLE_CHOICE:
 			for i in range(offset.contents.data.number):
-				print(i+1,"----> ",end="")
-				print(offset.contents.data.answer.choices[i].choice.decode())
+				link = offset.contents.data.answer.choices[i].link
+				choice = offset.contents.data.answer.choices[i].choice.decode()
+				print(i+1,"--> ",link,"--> ",end="")
+				print(choice)
 				i += 1
 		else:
-			print(offset.contents.data.answer.keyword.word.decode())
+			correct = offset.contents.data.answer.keyword.correct
+			incorrect = offset.contents.data.answer.keyword.incorrect
+			keyword = offset.contents.data.answer.keyword.word.decode()
+			print("correct = ",correct)
+			print("incorrect = ",incorrect)
+			print("keyword = ",keyword)
 		print()
 		offset = offset.contents.next
