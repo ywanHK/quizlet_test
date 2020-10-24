@@ -18,6 +18,9 @@ int insert(edit_list *init,unsigned int index,task question,char type){
 	edit_list *offset_this=init,*offset_next=NULL;
 	edit_list *new=NULL;
 	int counter;
+	if(type!=FILL_BLANK&&type!=MULTIPLE_CHOICE){
+		return INVALID_TYPE;
+	}
 	if(!index){
 		counter = 1;
 		while(offset_this->next){
