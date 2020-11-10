@@ -71,8 +71,12 @@ api.seek.restype = POINTER(edt)
 api.search_all.restype = POINTER(POINTER(edt))
 api.search_in.restype = POINTER(POINTER(edt))
 api.search.restype = POINTER(c_char)
+api.read_from_file.restype = POINTER(task_t)
+api.mem_convert.restype = POINTER(task_t)
+api.edit_task.restype = c_int
+api.run_task.restype = c_uint
 
-class project_form:
+class edit_quiz:
 	def __init__(self,description="",file="",default=FILL_BLANK):
 		self.initial = edt()
 		self.handler = pointer(self.initial)
@@ -112,10 +116,6 @@ class project_form:
 		ptr.contents.choice = choice.encode()
 		ptr.contents.link = link
 		return api.edit_task(self.handler,C_INSERT_CHOICE,ptr,index,pos)
-
-
-
-
 	def edit_choice(self,index,position,choice=None,link=-1):
 		ptr = pointer(answer())
 		original = api.seek(self.handler,index).contents.data
@@ -132,14 +132,8 @@ class project_form:
 		else:
 			ptr.contents.link = link
 		return api.edit_task(self.handler,C_EDIT_CHOICE,ptr,index,position)
-
-
-
 	def delete_choice(self,index,pos):
 		return api.edit_task(self.handler,C_DELETE_CHOICE,index,pos)
-
-
-
 	def edit_answer(self,index,keyword=None,cor=-1,incor=-1):
 		kw = pointer(keywd())
 		original = api.seek(self.handler,index).contents.data
@@ -161,9 +155,6 @@ class project_form:
 			i = original.answer.keyword.incorrect
 			kw.contents.incorrect = i
 		return api.edit_task(self.handler,C_EDIT_ANSWER,kw,index)
-
-
-
 	def change_type(self,tp,index):
 		return api.edit_task(self.handler,C_CHANGE_TYPE,index,tp)
 	def serach_all(self,mt,option):
@@ -194,6 +185,71 @@ class project_form:
 		return api.edit_task(self.handler,C_WRITE,f,cmpl)
 
 
+class run_quiz:
+	def __init__(self,file="",task=None):
+		# task is a the first element of a linked-list
+		self.position = 1
+		if file!="":
+			self.handler = api.read_from_file(file.encode())
+		elif task is not None:
+			self.handler = api.mem_convert(task.handler)
+		else:
+			raise Exception("No parameters")
+	@staticmethod
+	def format(data):
+		qtype = data.type
+		entry = {}
+		question = data.question.decode()
+		if qtype == FILL_BLANK:
+			entry.update({
+				question:None
+			})
+		elif qtype == MULTIPLE_CHOICE:
+			entry.update({
+				question:[]
+			})
+			for i in range(data.number):
+				entry[question].append(data.answer.choices[i].choice.decode())
+		return entry
+
+
+	def initialize(self):
+		number = self.handler[0].number
+		api.safe_check(self.handler,number,1)
+		q = self.format(self.handler[1])
+		q.update({"status":0})
+		return q
+	def nextq(self,ans):
+		qtype = self.handler[self.position].type
+		ret = {}
+		if qtype == FILL_BLANK:
+			if isinstance(ans,str):
+				ans = ans.encode()
+			else:
+				ans = str(ans)
+		elif qtype == MULTIPLE_CHOICE:
+			if isinstance(ans,int):
+				pass
+			else:
+				try:
+					ans = abs(int(ans) % MAX_NUM)
+				except Exception:
+					ret.update({"status":INVALID_TYPE})
+					return ret
+		else:
+			ret.update({"status":INVALID_TYPE})
+		self.position = api.run_task(self.handler,self.position,ans)
+		if self.position == END_EXEC:
+			ret.update({"status":END_EXEC})
+		else:
+			ret = self.format(self.handler[self.position])
+			ret.update({"status":0})
+		return ret
+
+
+	def finalize(self):
+		self.position = 1
+		api.finish(self.handler)
 
 
 
