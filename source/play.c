@@ -234,14 +234,39 @@ int edit_task(edit_list *init,int cmd,...){
 	va_end(valist);
 	return status;
 }
+void safe_check(task *exec,unsigned int number,int cmpl){
+	unsigned int i;
+	if(!exec)
+		return;
+	if(cmpl==1){
+		link(exec);
+	}
+	for(i=1;i<=number;i++){
+		exec[i].question[2303] = 0x00;
+		if(exec[i].type==MULTIPLE_CHOICE){
+			exec[i].number = exec[i].number & 7;
+			for(int j=0;j<exec[i].number;j++){
+				exec[i].answer.choices[j].choice[249] = 0x00;
+			}
+		}
+		else{
+			exec[i].type = FILL_BLANK;
+			exec[i].number = 0;
+			exec[i].answer.keyword.word[1783] = 0x00;
+		}
+	}
+}
 unsigned int run_task(task *exec,unsigned int position,...){
 	// This function is not yet tested
+	// returns the index of the next question
 	va_list valist;
 	unsigned int next,answer;
 	unsigned char type = exec[position].type,*keyword;
 	va_start(valist,position);
+	if(!exec||position==END_EXEC)
+		return END_EXEC;
 	if(type==MULTIPLE_CHOICE){
-		answer = va_arg(valist,unsigned int);
+		answer = va_arg(valist,unsigned int) % exec[position].number;
 		next = exec[position].answer.choices[answer].link;
 	}
 	else{
@@ -259,26 +284,16 @@ unsigned int run_task(task *exec,unsigned int position,...){
 	va_end(valist);
 	return next;
 }
-void safe_check(task *exec,unsigned int number,int cmpl){
-	unsigned int i;
-	if(cmpl==1){
-		link(exec);
-	}
-	for(i=1;i<=number;i++){
-		exec[i].question[2303] = 0x00;
-		if(exec[i].type==MULTIPLE_CHOICE){
-			exec[i].number = exec[i].number & 7;
-			for(int j=0;j<exec[i].number;j++){
-				exec[i].answer.choices[j].choice[249] = 0x00;
-			}
-		}
-		else{
-			exec[i].number = 0;
-			exec[i].answer.keyword.word[1783] = 0x00;
-		}
-	}
+void finish(task *end){
+	free(end);
 }
-
-
+task *mem_convert(edit_list *init){
+	unsigned int number;
+	task *buffer = NULL;
+	number = count(init);
+	buffer = malloc(number*sizeof(edit_list)+1);
+	disassemble(init,buffer);
+	return buffer;
+}
 
 // Debug test bellow
