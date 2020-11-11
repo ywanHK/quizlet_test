@@ -9,7 +9,7 @@ FILL_BLANK = 0x04 # b'\x04'
 MEM_ALLOC_FAIL = 1
 MAX_EXCEEDED = 2
 INVALID_INDEX = 3
-DEL_EMPTY_SET = 4
+EMPTY_SET = 4
 INVALID_TYPE = 5
 
 C_INSERT = 0x10
@@ -78,6 +78,7 @@ api.run_task.restype = c_uint
 
 class edit_quiz:
 	def __init__(self,description="",file="",default=FILL_BLANK):
+		# handler is a pointer to the first element of linked-list
 		self.initial = edt()
 		self.handler = pointer(self.initial)
 		self.default_type = default
@@ -118,7 +119,9 @@ class edit_quiz:
 		return api.edit_task(self.handler,C_INSERT_CHOICE,ptr,index,pos)
 	def edit_choice(self,index,position,choice=None,link=-1):
 		ptr = pointer(answer())
-		original = api.seek(self.handler,index).contents.data
+		org = api.seek(self.handler,index)
+		if org:
+			original = org.contents.data
 		if original.type != MULTIPLE_CHOICE:
 			return INVALID_TYPE
 		if choice is not None:
@@ -188,39 +191,42 @@ class edit_quiz:
 class run_quiz:
 	def __init__(self,file="",task=None):
 		# task is a the first element of a linked-list
-		self.position = 1
+		# __handler is an array allocated by calloc()
+		self.positon = 1
 		if file!="":
 			self.handler = api.read_from_file(file.encode())
+			if not self.handler:
+				raise Exception("Invalid file format")
 		elif task is not None:
 			self.handler = api.mem_convert(task.handler)
+			if not self.handler:
+				raise Exception("Memory allocation failed")
 		else:
 			raise Exception("No parameters")
+		self.number = self.handler[0].number
 	@staticmethod
 	def format(data):
 		qtype = data.type
 		entry = {}
-		question = data.question.decode()
+		qn = data.question.decode()
 		if qtype == FILL_BLANK:
-			entry.update({
-				question:None
-			})
+			entry.update({qn:None})
 		elif qtype == MULTIPLE_CHOICE:
-			entry.update({
-				question:[]
-			})
+			entry.update({qn:[]})
 			for i in range(data.number):
-				entry[question].append(data.answer.choices[i].choice.decode())
+				entry[qn].append(data.answer.choices[i].choice.decode())
 		return entry
-
-
 	def initialize(self):
-		number = self.handler[0].number
-		api.safe_check(self.handler,number,1)
-		q = self.format(self.handler[1])
-		q.update({"status":0})
+		api.safe_check(self.handler,self.number,1)
+		q = {}
+		if self.number > 0:
+			q.update(self.format(self.handler[self.positon]))
+			q.update({"status":0})
+		else:
+			q.update({"status":EMPTY_SET})
 		return q
 	def nextq(self,ans):
-		qtype = self.handler[self.position].type
+		qtype = self.handler[self.positon].type
 		ret = {}
 		if qtype == FILL_BLANK:
 			if isinstance(ans,str):
@@ -238,17 +244,15 @@ class run_quiz:
 					return ret
 		else:
 			ret.update({"status":INVALID_TYPE})
-		self.position = api.run_task(self.handler,self.position,ans)
-		if self.position == END_EXEC:
+		self.positon = api.run_task(self.handler,self.positon,ans)
+		if self.positon == END_EXEC:
 			ret.update({"status":END_EXEC})
 		else:
-			ret = self.format(self.handler[self.position])
+			ret = self.format(self.handler[self.positon])
 			ret.update({"status":0})
 		return ret
-
-
 	def finalize(self):
-		self.position = 1
+		self.positon = 1
 		api.finish(self.handler)
 
 
