@@ -69,7 +69,7 @@ int delete(edit_list *init,unsigned int index){
 	edit_list *offset_next=init;
 	int counter = count(init);
 	if(!counter){
-		return DEL_EMPTY_SET;
+		return EMPTY_SET;
 	}
 	if(index==0){
 		for(int i=0;i<counter;i++){
@@ -191,7 +191,7 @@ int edit_choice(task *node,answer *data,int index,int cmd){
 		}
 		case _DELETE_CHOICE:{
 			if(!number)
-				status = DEL_EMPTY_SET;
+				status = EMPTY_SET;
 			else if(number>7){
 				node->number = 7;
 				status = 1;
