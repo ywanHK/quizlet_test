@@ -122,6 +122,8 @@ class edit_quiz:
 		org = api.seek(self.handler,index)
 		if org:
 			original = org.contents.data
+		else:
+			return INVALID_INDEX
 		if original.type != MULTIPLE_CHOICE:
 			return INVALID_TYPE
 		if choice is not None:
