@@ -230,12 +230,7 @@ class run_quiz:
 	def nextq(self,ans):
 		qtype = self.handler[self.positon].type
 		ret = {}
-		if qtype == FILL_BLANK:
-			if isinstance(ans,str):
-				ans = ans.encode()
-			else:
-				ans = str(ans)
-		elif qtype == MULTIPLE_CHOICE:
+		if qtype == MULTIPLE_CHOICE:
 			if isinstance(ans,int):
 				pass
 			else:
@@ -244,8 +239,12 @@ class run_quiz:
 				except Exception:
 					ret.update({"status":INVALID_TYPE})
 					return ret
+		# elif qtype == FILL_BLANK:
 		else:
-			ret.update({"status":INVALID_TYPE})
+			if isinstance(ans,str):
+				ans = ans.encode()
+			else:
+				ans = str(ans).encode()
 		self.positon = api.run_task(self.handler,self.positon,ans)
 		if self.positon == END_EXEC:
 			ret.update({"status":END_EXEC})
