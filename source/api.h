@@ -15,7 +15,7 @@
 #define MEM_ALLOC_FAIL 1
 #define MAX_EXCEEDED 2
 #define INVALID_INDEX 3
-#define DEL_EMPTY_SET 4
+#define EMPTY_SET 4
 #define INVALID_TYPE 5
 
 struct answer_choice_t{
@@ -49,7 +49,7 @@ typedef struct task_t task;
 typedef struct edt edit_list;
 
 
-unsigned int count(edit_list *init);
+unsigned int count(edit_list *init); // Does not count the first one
 int insert(edit_list *init,unsigned int index,task question,char type);
 int delete(edit_list *init,unsigned int index);
 void free_all(edit_list *init);
@@ -103,6 +103,8 @@ task *read_from_file(char *name);
 int write_to_file(char *name,task *data);
 unsigned int run_task(task *exec,unsigned int position,...);
 void safe_check(task *exec,unsigned int number,int cmpl);
+task *mem_convert(edit_list *init);
+void finish(task *end);
 
 int edit_task(edit_list *init,int cmd,...);
 
