@@ -44,6 +44,7 @@ void link(task *final){
 	unsigned int counter,num_choice,lnk;
 	unsigned int num = final[0].number;
 	counter = num<=MAX_NUM?num:MAX_NUM;
+	if(!final)return;
 	for(unsigned int i=1;i<=counter;i++){
 		if(final[i].type==FILL_BLANK){
 			final[i].number = 0;
@@ -235,13 +236,12 @@ int edit_task(edit_list *init,int cmd,...){
 	return status;
 }
 void safe_check(task *exec,unsigned int number,int cmpl){
-	unsigned int i;
-	if(!exec)
-		return;
+	if(!exec)return;
+	exec[0].number = number;
 	if(cmpl==1){
 		link(exec);
 	}
-	for(i=1;i<=number;i++){
+	for(unsigned int i=1;i<=number;i++){
 		exec[i].question[2303] = 0x00;
 		if(exec[i].type==MULTIPLE_CHOICE){
 			exec[i].number = exec[i].number & 7;
@@ -260,10 +260,10 @@ unsigned int run_task(task *exec,unsigned int position,...){
 	// This function is not yet tested
 	// returns the index of the next question
 	va_list valist;
-	unsigned int next,answer;
+	unsigned int next,answer,number = exec[0].number;
 	unsigned char type = exec[position].type,*keyword;
 	va_start(valist,position);
-	if(!exec||position==END_EXEC)
+	if(!exec||position==END_EXEC||position>number)
 		return END_EXEC;
 	if(type==MULTIPLE_CHOICE){
 		answer = va_arg(valist,unsigned int) % exec[position].number;
@@ -281,6 +281,7 @@ unsigned int run_task(task *exec,unsigned int position,...){
 	if(!next){
 		next = position + 1;
 	}
+	next = next>number?END_EXEC:next;
 	va_end(valist);
 	return next;
 }
@@ -291,8 +292,10 @@ task *mem_convert(edit_list *init){
 	unsigned int number;
 	task *buffer = NULL;
 	number = count(init);
-	buffer = malloc(number*sizeof(edit_list)+1);
-	disassemble(init,buffer);
+	buffer = calloc(1,(number+1)*sizeof(edit_list));
+	if(!buffer)
+		return NULL;
+	assemble(init,buffer);
 	return buffer;
 }
 
