@@ -1,16 +1,19 @@
 from ctypes import *
 
-MAX_NUM = 1000000
+MAX_NUM = 500000
 END_EXEC = 0xffffff00
 
 MULTIPLE_CHOICE = 0x06 # b'\x06'
 FILL_BLANK = 0x04 # b'\x04'
+
+NAME = b"00000000"
 
 MEM_ALLOC_FAIL = 1
 MAX_EXCEEDED = 2
 INVALID_INDEX = 3
 EMPTY_SET = 4
 INVALID_TYPE = 5
+FILE_NO_EXT = 6
 
 C_INSERT = 0x10
 C_INSERT_CHOICE = 0x11
@@ -25,6 +28,7 @@ C_CHANGE_TYPE = 0x18
 C_READ = 0x19
 C_WRITE = 0x1a
 
+## options for the search functions
 c_search_all_question = 0x1b
 c_search_all_answer = 0x1c
 c_search_all = 0x1d
@@ -37,13 +41,13 @@ c_search_question_answer = 0x23
 
 class answer(Structure):
 	_fields_ = [
-		("choice",c_char*250),
+		("choice",c_char*512),
 		("link",c_uint),
 	]
 
 class keywd(Structure):
 	_fields_ = [
-		("word",c_char*1784),
+		("word",c_char*2048),
 		("correct",c_uint),
 		("incorrect",c_uint),
 	]
@@ -56,7 +60,7 @@ class internal(Union):
 
 class task_t(Structure):
 	_fields_ = [
-		("question",c_char*2304),
+		("question",c_char*3072),
 		("type",c_ubyte),
 		("number",c_uint),
 		("answer",internal),
@@ -66,19 +70,29 @@ class edt(Structure):
 	pass
 edt._fields_ = [("data",task_t),("next",POINTER(edt))]
 
+class file_info(Structure):
+	_fields_ = [
+		("type",c_char),
+		("error",c_int),
+		("length",c_ulonglong),
+		("content",c_void_p),
+	]
+
 api = cdll.LoadLibrary("core.dll")
 api.seek.restype = POINTER(edt)
 api.search_all.restype = POINTER(POINTER(edt))
 api.search_in.restype = POINTER(POINTER(edt))
 api.search.restype = POINTER(c_char)
-api.read_from_file.restype = POINTER(task_t)
+api.read_from_file.restype = file_info
 api.mem_convert.restype = POINTER(task_t)
 api.edit_task.restype = c_int
 api.run_task.restype = c_uint
 
+
+# self.handler is a pointer to the first element of linked-list
+# self.name is the name of the .gt file
 class edit_quiz:
 	def __init__(self,description="",file="",default=FILL_BLANK):
-		# handler is a pointer to the first element of linked-list
 		self.initial = edt()
 		self.handler = pointer(self.initial)
 		self.default_type = default
@@ -141,7 +155,11 @@ class edit_quiz:
 		return api.edit_task(self.handler,C_DELETE_CHOICE,index,pos)
 	def edit_answer(self,index,keyword=None,cor=-1,incor=-1):
 		kw = pointer(keywd())
-		original = api.seek(self.handler,index).contents.data
+		org = api.seek(self.handler,index)
+		if org:
+			original = org.contents.data
+		else:
+			return INVALID_INDEX
 		if original.type !=FILL_BLANK:
 			return INVALID_TYPE
 		if keyword is not None:
@@ -162,42 +180,56 @@ class edit_quiz:
 		return api.edit_task(self.handler,C_EDIT_ANSWER,kw,index)
 	def change_type(self,tp,index):
 		return api.edit_task(self.handler,C_CHANGE_TYPE,index,tp)
-	def serach_all(self,mt,option):
-		match = mt.encode()
+	def serach_all(self,match,option):
+		match = match.encode()
 		match_list = []
 		ptr = api.search_all(self.handler,match,option)
-		i = 0
-		while ptr.contents[i]:
-			match_list.append(ptr.contents[i])
-			i += 1
+		if ptr:
+			i = 0
+			while ptr.contents[i]:
+				match_list.append(ptr.contents[i])
+				i += 1
 		return match_list
-	def search_range(self,mt,option,start,end):
-		match = mt.encode()
+	def search_range(self,match,option,start,end):
+		match = match.encode()
 		match_list = []
 		ptr = api.search_in(self.handler,match,option,start,end)
-		i = 0
-		while ptr.contents[i]:
-			match_list.append(ptr.contents[i])
-			i += 1
+		if ptr:
+			i = 0
+			while ptr.contents[i]:
+				match_list.append(ptr.contents[i])
+				i += 1
 		return match_list
 	def search_in(self,match,index,option):
 		node = api.seek(self.handler,index)
 		return api.search(node,match,option)
-	def save(self,file,cmpl=0):
-		if file=="":
+	def change_default_type(self,def_type):
+		if def_type not in [MULTIPLE_CHOICE,FILL_BLANK]:
 			return 1
-		f = file.encode()
-		return api.edit_task(self.handler,C_WRITE,f,cmpl)
+		self.default_type = def_type
+		return 0
+	def save(self,name,cmpl=0):
+		if name=="":
+			return 1
+		f = name.encode()
+		if api.edit_task(self.handler,C_WRITE,f,cmpl):
+			status = api.create(f)
+			if status:
+				return status
+			return api.edit_task(self.handler,C_WRITE,f,cmpl)
+		return 0
+
 
 
 class run_quiz:
 	def __init__(self,file="",task=None):
 		# task is a the first element of a linked-list
-		# __handler is an array allocated by calloc()
+		# handler is an array allocated by calloc()
 		self.positon = 1
 		if file!="":
-			self.handler = api.read_from_file(file.encode())
-			if not self.handler:
+			information = api.read_from_file(file.encode(),NAME)
+			self.handler = cast(information.content,POINTER(task_t))
+			if not self.handler: # maybe content can be NULL
 				raise Exception("Invalid file format")
 		elif task is not None:
 			self.handler = api.mem_convert(task.handler)
@@ -228,6 +260,8 @@ class run_quiz:
 			q.update({"status":EMPTY_SET})
 		return q
 	def nextq(self,ans):
+		if self.positon == END_EXEC or self.positon > self.number:
+			return {"status":END_EXEC}
 		qtype = self.handler[self.positon].type
 		ret = {}
 		if qtype == MULTIPLE_CHOICE:
@@ -239,13 +273,13 @@ class run_quiz:
 				except Exception:
 					ret.update({"status":INVALID_TYPE})
 					return ret
-		# elif qtype == FILL_BLANK:
+			self.positon = api.run_task(self.handler,self.positon,ans,b"")
 		else:
 			if isinstance(ans,str):
 				ans = ans.encode()
 			else:
 				ans = str(ans).encode()
-		self.positon = api.run_task(self.handler,self.positon,ans)
+			self.positon = api.run_task(self.handler,self.positon,0,ans)
 		if self.positon == END_EXEC:
 			ret.update({"status":END_EXEC})
 		else:
