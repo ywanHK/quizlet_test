@@ -1,5 +1,6 @@
 
 # static dependencies : libbcrypt.a libbz2.a liblzma.a libz.a
+# dynamic compile option: -lzip
 CC = gcc
 LIBS = -lzip -lbcrypt -lbz2 -llzma -lz
 
