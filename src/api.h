@@ -5,30 +5,33 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <unistd.h>
 
-#define MAX_NUM 1000000 // will be changed to 1000000
+#define MAX_NUM 500000 // Except the first task (the title)
 #define END_EXEC 0xffffff00
 
 #define MULTIPLE_CHOICE 0x06
 #define FILL_BLANK 0x04
 
+/* Error codes */
 #define MEM_ALLOC_FAIL 1
 #define MAX_EXCEEDED 2
 #define INVALID_INDEX 3
 #define EMPTY_SET 4
 #define INVALID_TYPE 5
+#define FILE_NO_EXT 6
 
 struct answer_choice_t{
-	unsigned char choice[250];
+	unsigned char choice[512];
 	unsigned int link;
 };
 struct answer_keywd_t{
-	unsigned char word[1784];
+	unsigned char word[2048];
 	unsigned int correct;
 	unsigned int incorrect;
 };
 struct task_t{
-	unsigned char question[2304];
+	unsigned char question[3072];
 	unsigned char type;
 	unsigned int number;
 	union{
@@ -97,41 +100,37 @@ typedef enum search_t search_cmd;
 unsigned int assemble(edit_list *init,task *exec);
 int disassemble(edit_list *init,task *exec);
 void link(task *final);
+#if 0
+static int auto_naming = 0;
 char *get_filename_ext(char *filename);
 char *name_file(char *filename);
-task *read_from_file(char *name);
-int write_to_file(char *name,task *data);
-unsigned int run_task(task *exec,unsigned int position,...);
+#endif
+unsigned int run_task(task *exec,unsigned int position,int choice,unsigned char *keyword);
 void safe_check(task *exec,unsigned int number,int cmpl);
 task *mem_convert(edit_list *init);
 void finish(task *end);
 
-int edit_task(edit_list *init,int cmd,...);
+int edit_task(edit_list *init,int cmd,...); /* returns 0 upon success */
 
 #endif
-
-
-
-
 
 /*
 The format of edit_task is:
 
+edit_task(edit_list *init,int _INSERT,char *Question,unsigned int q_index,int type)
+edit_task(edit_list *init,int _DELETE,unsigned q_index)
+edit_task(edit_list *init,int _DELETE_ALL)
+edit_task(edit_list *init,int _EDIT,char *Edited_question,unsigned int q_index)
 
-edit_task(init,_INSERT,"Question",q_index,type)
-edit_task(init,_DELETE,q_index)
-edit_task(init,_DELETE_ALL)
-edit_task(init,_EDIT,"Edited question",q_index)
+edit_task(edit_list *init,int _INSERT_CHOICE,answer *answer,unsigned int q_index,int c_index)
+edit_task(edit_list *init,int _EDIT_CHOICE,answer *answer,unsigned int q_index,int c_index)
+edit_task(edit_list *init,int _DELETE_CHOICE,unsigned int q_index,int c_index)
 
-edit_task(init,_INSERT_CHOICE,*answer,q_index,c_index)
-edit_task(init,_EDIT_CHOICE,*answer,q_index,c_index)
-edit_task(init,_DELETE_CHOICE,q_index,c_index)
+edit_task(edit_list *init,int _CHANGE_TYPE,unsigned int q_index,int type)
+edit_task(edit_list *init,int _EDIT_ANSWER,keywd *keyword,unsigned int q_index)
 
-edit_task(init,_EDIT_ANSWER,*keywd,q_index)
-edit_task(init,_CHANGE_TYPE,q_index,type)
-
-edit_task(init,_READ,"name",_CMPL)
-edit_task(init,_WRITE,"name",_CMPL)
-// _CMPL == 1 tells the program to link
+edit_task(edit_list *init,int _READ,char *name,int _CMPL)
+edit_task(edit_list *init,int _WRITE,char *name",int _CMPL)
+// _CMPL == 1 tells the program to remove extra links
 
 */
