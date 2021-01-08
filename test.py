@@ -1,3 +1,3 @@
-# this program will call "core.dll"
+# this program will import data.py
 
 from data import *
