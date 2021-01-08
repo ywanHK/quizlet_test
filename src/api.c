@@ -157,10 +157,8 @@ int edit_answer(task *node,keywd *ans){
 		return INVALID_TYPE;
 	}
 	else{
-		memset(node->answer.keyword.word,0,1784);
-		strncpy((char*)node->answer.keyword.word,(char*)ans->word,1783);
-		node->answer.keyword.correct = ans->correct;
-		node->answer.keyword.incorrect = ans->incorrect;
+		memset(node->answer.keyword.word,0,2047);
+		node->answer.keyword = *ans;
 		return 0;
 	}
 }
