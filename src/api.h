@@ -115,3 +115,26 @@ void finish(task *end);
 int edit_task(edit_list *init,int cmd,...); /* returns 0 upon success */
 
 #endif
+
+/*
+
+The format of edit_task is:
+
+edit_task(edit_list *init,int _INSERT,char *Question,unsigned int q_index,int type)
+edit_task(edit_list *init,int _DELETE,unsigned q_index)
+edit_task(edit_list *init,int _DELETE_ALL)
+edit_task(edit_list *init,int _EDIT,char *Edited_question,unsigned int q_index)
+
+edit_task(edit_list *init,int _INSERT_CHOICE,answer *answer,unsigned int q_index,int c_index)
+edit_task(edit_list *init,int _EDIT_CHOICE,answer *answer,unsigned int q_index,int c_index)
+edit_task(edit_list *init,int _DELETE_CHOICE,unsigned int q_index,int c_index)
+
+edit_task(edit_list *init,int _CHANGE_TYPE,unsigned int q_index,int type)
+edit_task(edit_list *init,int _EDIT_ANSWER,keywd *keyword,unsigned int q_index)
+
+edit_task(edit_list *init,int _READ,char *name,int _CMPL)
+edit_task(edit_list *init,int _WRITE,char *name",int _CMPL)
+
+// _CMPL == 1 : remove extra links
+
+*/
