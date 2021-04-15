@@ -13,10 +13,8 @@ int create(char *archive_name){
 	zip_source_t *source;
 	task title={0};
 	int status = 0,index;
-	FILE *fp;
 
 	// check if archive works properly
-	if((fp=fopen(archive_name,"w+")))fclose(fp);
 	if(!(archive=zip_open(archive_name,ZIP_CREATE,&status))){
 		if(!(archive=zip_open(archive_name,ZIP_TRUNCATE,&status))){
 			zip_close(archive);
@@ -47,7 +45,6 @@ int create(char *archive_name){
 		}
 	}
 	zip_close(archive);
-	free(archive_name);
 	return status;
 }
 
@@ -115,26 +112,28 @@ int write_to_file(char *archive_name,char *name,void *data,unsigned long long le
 	zip_t *archive = NULL;
 	zip_source_t *source;
 	int index,status = 0;
-
 	if(strstr(name,".."))
 		return 1;
 	if(!(archive=zip_open(archive_name,0,&status))){
 		zip_close(archive);
 		return status;
 	}
-
-	index = zip_name_locate(archive,name,0);
 	if(!(source=zip_source_buffer(archive,data,length,0))){
+		zip_source_free(source);
 		zip_close(archive);
 		return 1;
 	}
-	if(index<0){
-		if(zip_file_add(archive,name,source,ZIP_FL_ENC_UTF_8)<0)
+	if((index=zip_name_locate(archive,name,0))<0){
+		if(zip_file_add(archive,name,source,ZIP_FL_ENC_UTF_8)<0){
 			zip_source_free(source);
+			status = 1;
+		}
 	}
 	else{
-		if(zip_file_replace(archive,index,source,ZIP_FL_ENC_UTF_8)<0)
+		if(zip_file_replace(archive,index,source,ZIP_FL_ENC_UTF_8)<0){
 			zip_source_free(source);
+			status = 1;
+		}
 	}
 	zip_close(archive);
 	return status;
@@ -147,20 +146,17 @@ int write_to_file(char *archive_name,char *name,void *data,unsigned long long le
 int delete_file(char *archive_name,char *name){
 	zip_t *archive = NULL;
 	int index,status = 0;
-
 	if(strstr(name,"..")||!strcmp(name,NAME)||!strcmp(name,"i/"))
 		return INVALID_INDEX;
 	if(!(archive=zip_open(archive_name,0,&status))){
 		zip_close(archive);
 		return status;
 	}
-
 	if((index=zip_name_locate(archive,name,0))<0){
 		zip_close(archive);
 		return 1;
 	}
 	status = zip_delete(archive,index);
-	printf("test\n");
 	zip_close(archive);
 	return status;
 }
