@@ -5,6 +5,7 @@
 
 // type describes the type of content ('t' for task)
 // length describes the length of content in bytes
+// task file (00000000) must NOT be empty
 struct file_info{
 	unsigned char type;
 	int error;
