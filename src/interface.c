@@ -6,6 +6,11 @@
 #include "api.h"
 #include "io/file_op.h"
 
+struct result{
+	unsigned char *explanation;
+	unsigned int next;
+};
+
 // Note: first element of *exec is reserved
 // exec[0].number defines the number of questions
 unsigned int assemble(edit_list *init,task *exec){
@@ -82,24 +87,24 @@ void link(task *final){
 	}
 }
 #if 0
-// Will be enabled after implementing auto_naming
-char *get_filename_ext(char *filename){
-	char *dot = strrchr(filename,'.');
-	if(!dot||dot == filename)return "";
-	return dot + 1;
-}
-char *name_file(char *filename){
-	char *name,*extension;
-	extension = get_filename_ext(filename);
-	name = malloc(strlen(filename)+4);
-	if(!name)
-		return NULL;
-	else if(!strcmp("gt",extension))
-		strcpy(name,filename);
-	else
-		sprintf(name,"%s.gt",filename);
-	return name;
-}
+	// Will be enabled after implementing auto_naming
+	char *get_filename_ext(char *filename){
+		char *dot = strrchr(filename,'.');
+		if(!dot||dot == filename)return "";
+		return dot + 1;
+	}
+	char *name_file(char *filename){
+		char *name,*extension;
+		extension = get_filename_ext(filename);
+		name = malloc(strlen(filename)+4);
+		if(!name)
+			return NULL;
+		else if(!strcmp("gt",extension))
+			strcpy(name,filename);
+		else
+			sprintf(name,"%s.gt",filename);
+		return name;
+	}
 #endif
 void safe_check(task *exec,unsigned int number,int cmpl){
 	if(!exec)return;
@@ -111,46 +116,62 @@ void safe_check(task *exec,unsigned int number,int cmpl){
 		if(exec[i].type==MULTIPLE_CHOICE){
 			exec[i].number = exec[i].number & 7;
 			for(int j=0;j<exec[i].number;j++){
-				exec[i].answer.choices[j].choice[511] = 0x00;
+				exec[i].answer.choices[j].choice[479] = 0x00;
+				exec[i].answer.choices[j].explanation[511] = 0x00;
 			}
 		}
 		else{
 			exec[i].type = FILL_BLANK;
 			exec[i].number = 0;
-			exec[i].answer.keyword.word[2047] = 0x00;
+			exec[i].answer.keyword.word[1919] = 0x00;
+			exec[i].answer.keyword.explanation[2047] = 0x00;
 		}
 	}
 }
-unsigned int run_task(task *exec,unsigned int position,int choice,unsigned char *keyword){
+struct result run_task(task *exec,unsigned int position,int choice,unsigned char *keyword){
 	// returns the index of the next question
 	// If answer is invalid type, return same position
-	unsigned int next,number;
+	unsigned int number;
 	unsigned char type;
-	if(!exec)
-		return END_EXEC;
+	struct result ret={0};
+	if(!exec){
+		ret.next = END_EXEC;
+		return ret;
+	}
 	number = exec[0].number;
-	if(position==END_EXEC||position>number)
-		return END_EXEC;
+	if(position==END_EXEC||position>number){
+		ret.next = END_EXEC;
+		return ret;
+	}
 	type = exec[position].type;
 	if(type==MULTIPLE_CHOICE){
-		choice = choice % exec[position].number;
-		next = exec[position].answer.choices[abs(choice-1)].link;
+		if(!exec[position].number){
+			ret.next = END_EXEC;
+			return ret;
+		}
+		choice = abs((choice % exec[position].number) - 1);
+		ret.next = exec[position].answer.choices[choice].link;
+		ret.explanation = exec[position].answer.choices[choice].explanation;
 	}
 	else{
-		if(!keyword)
-			return position;
+		if(!keyword){
+			ret.next = position;
+			return ret;
+		}
 		if(!strstr((char*)keyword,(char*)exec[position].answer.keyword.word)){
-			next = exec[position].answer.keyword.incorrect;
+			// IMPORTANT: This statement is case sensitive
+			ret.next = exec[position].answer.keyword.incorrect;
 		}
 		else{
-			next = exec[position].answer.keyword.correct;
+			ret.next = exec[position].answer.keyword.correct;
 		}
+		ret.explanation = exec[position].answer.keyword.explanation;
 	}
-	if(!next){
-		next = position + 1;
+	if(!ret.next){
+		ret.next = position + 1;
 	}
-	next = next>number?END_EXEC:next;
-	return next;
+	ret.next = ret.next>number?END_EXEC:ret.next;
+	return ret;
 }
 int edit_task(edit_list *init,int cmd,...){
 	va_list valist;
@@ -180,8 +201,10 @@ int edit_task(edit_list *init,int cmd,...){
 			edit_list *offset = seek(init,q_index);
 			if(!offset)
 				status = INVALID_INDEX;
-			else
+			else{
+				memset(offset->data.question,0,3071);
 				strncpy((char*)offset->data.question,question,3071);
+			}
 			break;
 		}
 		case _EDIT_ANSWER:{
@@ -217,7 +240,7 @@ int edit_task(edit_list *init,int cmd,...){
 		}
 		case _READ:{
 			struct file_info info;
-			task *buffer;
+			task *buffer = NULL;
 			int cmpl;
 			info = read_from_file(va_arg(valist,char*),NAME);
 			if(!info.content){ // maybe content can be NULL, WTF
@@ -265,7 +288,8 @@ void finish(task *end){
 task *mem_convert(edit_list *init){
 	unsigned int number;
 	task *buffer = NULL;
-	if(!init)return buffer;
+	if(!init)
+		return buffer;
 	number = count(init);
 	buffer = calloc(number+1,sizeof(edit_list));
 	if(!buffer)
