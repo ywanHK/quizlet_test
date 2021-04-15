@@ -157,7 +157,6 @@ int edit_answer(task *node,keywd *ans){
 		return INVALID_TYPE;
 	}
 	else{
-		memset(node->answer.keyword.word,0,2047);
 		node->answer.keyword = *ans;
 		return 0;
 	}
@@ -259,11 +258,18 @@ edit_list **search_all(edit_list *init,char *match,int option){
 					if(strstr((char*)offset->data.answer.keyword.word,match)){
 						ADD(indeces,counter,offset,size);
 					}
+					else if(strstr((char*)offset->data.answer.keyword.explanation,match)){
+						ADD(indeces,counter,offset,size);
+					}
 					offset = offset->next;
 					continue;
 				}
 				for(i=0;i<offset->data.number;i++){
 					if(strstr((char*)offset->data.answer.choices[i].choice,match)){
+						ADD(indeces,counter,offset,size);
+						break;
+					}
+					else if(strstr((char*)offset->data.answer.choices[i].explanation,match)){
 						ADD(indeces,counter,offset,size);
 						break;
 					}
@@ -282,11 +288,18 @@ edit_list **search_all(edit_list *init,char *match,int option){
 						if(strstr((char*)offset->data.answer.keyword.word,match)){
 							ADD(indeces,counter,offset,size);
 						}
+						else if(strstr((char*)offset->data.answer.keyword.explanation,match)){
+							ADD(indeces,counter,offset,size);
+						}
 						offset = offset->next;
 						continue;
 					}
 					for(i=0;i<offset->data.number;i++){
 						if(strstr((char*)offset->data.answer.choices[i].choice,match)){
+							ADD(indeces,counter,offset,size);
+							break;
+						}
+						else if(strstr((char*)offset->data.answer.choices[i].explanation,match)){
 							ADD(indeces,counter,offset,size);
 							break;
 						}
@@ -336,11 +349,18 @@ edit_list **search_in(edit_list *init,
 					if(strstr((char*)offset->data.answer.keyword.word,match)){
 						ADD(indeces,counter,offset,size);
 					}
+					else if(strstr((char*)offset->data.answer.keyword.explanation,match)){
+						ADD(indeces,counter,offset,size);
+					}
 					offset = offset->next;
 					continue;
 				}
 				for(i=0;i<offset->data.number;i++){
 					if(strstr((char*)offset->data.answer.choices[i].choice,match)){
+						ADD(indeces,counter,offset,size);
+						break;
+					}
+					else if(strstr((char*)offset->data.answer.choices[i].explanation,match)){
 						ADD(indeces,counter,offset,size);
 						break;
 					}
@@ -359,11 +379,18 @@ edit_list **search_in(edit_list *init,
 						if(strstr((char*)offset->data.answer.keyword.word,match)){
 							ADD(indeces,counter,offset,size);
 						}
+						else if(strstr((char*)offset->data.answer.keyword.explanation,match)){
+							ADD(indeces,counter,offset,size);
+						}
 						offset = offset->next;
 						continue;
 					}
 					for(i=0;i<offset->data.number;i++){
 						if(strstr((char*)offset->data.answer.choices[i].choice,match)){
+							ADD(indeces,counter,offset,size);
+							break;
+						}
+						else if(strstr((char*)offset->data.answer.choices[i].explanation,match)){
 							ADD(indeces,counter,offset,size);
 							break;
 						}
@@ -391,12 +418,15 @@ char *search(edit_list *node,char *match,int option){
 		case _search_answer_only:{
 			if(node->data.type==FILL_BLANK){
 				ptr = strstr((char*)node->data.answer.keyword.word,match);
+				if(ptr)break;
+				ptr = strstr((char*)node->data.answer.keyword.explanation,match);
 				break;
 			}
 			for(int i=0;i<node->data.number;i++){
 				ptr = strstr((char*)node->data.answer.choices[i].choice,match);
-				if(ptr)
-					break;
+				if(ptr)break;
+				ptr = strstr((char*)node->data.answer.choices[i].explanation,match);
+				if(ptr)break;
 			}
 			break;
 		}
@@ -408,12 +438,15 @@ char *search(edit_list *node,char *match,int option){
 			else{
 				if(node->data.type==FILL_BLANK){
 					ptr = strstr((char*)node->data.answer.keyword.word,match);
+					if(ptr)break;
+					ptr = strstr((char*)node->data.answer.keyword.explanation,match);
 					break;
 				}
 				for(int i=0;i<node->data.number;i++){
 					ptr = strstr((char*)node->data.answer.choices[i].choice,match);
-					if(ptr)
-						break;
+					if(ptr)break;
+					ptr = strstr((char*)node->data.answer.choices[i].explanation,match);
+					if(ptr)break;
 				}
 				break;
 			}
@@ -424,7 +457,6 @@ char *search(edit_list *node,char *match,int option){
 	ret:return ptr;
 }
 #undef ADD
-
 
 
 // Debug test bellow
