@@ -1,10 +1,10 @@
 from ctypes import *
 
-MAX_NUM = 500000
+MAX_NUM = 400000
 END_EXEC = 0xffffff00
 
-MULTIPLE_CHOICE = 0x06 # b'\x06'
-FILL_BLANK = 0x04 # b'\x04'
+MULTIPLE_CHOICE = 0x06
+FILL_BLANK = 0x04
 
 NAME = b"00000000"
 
@@ -41,13 +41,15 @@ c_search_question_answer = 0x23
 
 class answer(Structure):
 	_fields_ = [
-		("choice",c_char*512),
+		("choice",c_char*480),
+		("explanation",c_char*512),
 		("link",c_uint),
 	]
 
 class keywd(Structure):
 	_fields_ = [
-		("word",c_char*2048),
+		("word",c_char*1920),
+		("explanation",c_char*2048),
 		("correct",c_uint),
 		("incorrect",c_uint),
 	]
@@ -78,7 +80,13 @@ class file_info(Structure):
 		("content",c_void_p),
 	]
 
-api = cdll.LoadLibrary("core.dll")
+class result(Structure):
+	_fields_ = [
+		("explanation",c_char_p),
+		("next",c_uint),
+	]
+
+api = cdll.LoadLibrary("./core.dll")
 api.seek.restype = POINTER(edt)
 api.search_all.restype = POINTER(POINTER(edt))
 api.search_in.restype = POINTER(POINTER(edt))
@@ -86,7 +94,7 @@ api.search.restype = POINTER(c_char)
 api.read_from_file.restype = file_info
 api.mem_convert.restype = POINTER(task_t)
 api.edit_task.restype = c_int
-api.run_task.restype = c_uint
+api.run_task.restype = result
 
 
 # self.handler is a pointer to the first element of linked-list
@@ -100,7 +108,7 @@ class edit_quiz:
 			if description=="":
 				pass
 			else:
-				self.initial.question = description.encode()
+				self.initial.data.question = description.encode()
 		else:
 			api.edit_task(self.handler,C_READ,file.encode(),0)
 	def count(self):
@@ -126,12 +134,13 @@ class edit_quiz:
 		return api.edit_task(self.handler,C_DELETE,index)
 	def delete_all(self):
 		return api.edit_task(self.handler,C_DELETE_ALL)
-	def insert_choice(self,choice,index,pos,link=0):
+	def insert_choice(self,choice,explanation,index,position,link=0):
 		ptr = pointer(answer())
 		ptr.contents.choice = choice.encode()
+		ptr.contents.explanation = explanation.encode()
 		ptr.contents.link = link
-		return api.edit_task(self.handler,C_INSERT_CHOICE,ptr,index,pos)
-	def edit_choice(self,index,position,choice=None,link=-1):
+		return api.edit_task(self.handler,C_INSERT_CHOICE,ptr,index,position)
+	def edit_choice(self,index,position,choice=None,explanation=None,link=-1):
 		ptr = pointer(answer())
 		org = api.seek(self.handler,index)
 		if org:
@@ -145,7 +154,12 @@ class edit_quiz:
 		else:
 			choice = original.answer.choices[position-1].choice
 			ptr.contents.choice = choice
-		if link == -1:
+		if explanation is not None:
+			ptr.contents.explanation = explanation.encode()
+		else:
+			explanation = original.answer.choices[position-1].explanation
+			ptr.contents.explanation = explanation
+		if link < 0:
 			lk = original.answer.choices[position-1].link
 			ptr.contents.link = lk
 		else:
@@ -153,7 +167,7 @@ class edit_quiz:
 		return api.edit_task(self.handler,C_EDIT_CHOICE,ptr,index,position)
 	def delete_choice(self,index,pos):
 		return api.edit_task(self.handler,C_DELETE_CHOICE,index,pos)
-	def edit_answer(self,index,keyword=None,cor=-1,incor=-1):
+	def edit_answer(self,index,keyword=None,explanation=None,correct=-1,incorrect=-1):
 		kw = pointer(keywd())
 		org = api.seek(self.handler,index)
 		if org:
@@ -167,20 +181,26 @@ class edit_quiz:
 		else:
 			w = original.answer.keyword.word
 			kw.contents.word = w
-		if cor != -1:
-			kw.contents.correct = cor
+		if explanation is not None:
+			kw.contents.explanation = explanation.encode()
+		else:
+			w = original.answer.keyword.explanation
+			kw.contents.explanation = w
+		if correct >= 0:
+			kw.contents.correct = correct
 		else:
 			c = original.answer.keyword.correct
 			kw.contents.correct = c
-		if incor != -1:
-			kw.contents.incorrect = incor
+		if incorrect >= 0:
+			kw.contents.incorrect = incorrect
 		else:
 			i = original.answer.keyword.incorrect
 			kw.contents.incorrect = i
 		return api.edit_task(self.handler,C_EDIT_ANSWER,kw,index)
-	def change_type(self,tp,index):
+	def change_type(self,index,tp):
 		return api.edit_task(self.handler,C_CHANGE_TYPE,index,tp)
 	def serach_all(self,match,option):
+		# Option: c_search_all_question, c_search_all_answer, c_search_all
 		match = match.encode()
 		match_list = []
 		ptr = api.search_all(self.handler,match,option)
@@ -191,6 +211,7 @@ class edit_quiz:
 				i += 1
 		return match_list
 	def search_range(self,match,option,start,end):
+		# Options: c_search_in_range_question, c_search_in_range_answer, c_search_in_range_all
 		match = match.encode()
 		match_list = []
 		ptr = api.search_in(self.handler,match,option,start,end)
@@ -201,6 +222,7 @@ class edit_quiz:
 				i += 1
 		return match_list
 	def search_in(self,match,index,option):
+		# Options: c_search_question_only, c_search_answer_only, c_search_question_answer
 		node = api.seek(self.handler,index)
 		return api.search(node,match,option)
 	def change_default_type(self,def_type):
@@ -220,14 +242,17 @@ class edit_quiz:
 		return 0
 
 
-
+# run_task returns struct result
+# task is a the first element of a linked-list
+# handler is an array allocated by calloc()
 class run_quiz:
 	def __init__(self,file="",task=None):
-		# task is a the first element of a linked-list
-		# handler is an array allocated by calloc()
 		self.positon = 1
 		if file!="":
 			information = api.read_from_file(file.encode(),NAME)
+			if information.error != 0:
+				err = "Can't open file : {}".format(information.error)
+				raise IOError(err)
 			self.handler = cast(information.content,POINTER(task_t))
 			if not self.handler: # maybe content can be NULL
 				raise Exception("Invalid file format")
@@ -259,27 +284,29 @@ class run_quiz:
 		else:
 			q.update({"status":EMPTY_SET})
 		return q
-	def nextq(self,ans):
+	def nextq(self,answer):
 		if self.positon == END_EXEC or self.positon > self.number:
 			return {"status":END_EXEC}
 		qtype = self.handler[self.positon].type
 		ret = {}
 		if qtype == MULTIPLE_CHOICE:
-			if isinstance(ans,int):
+			if isinstance(answer,int):
 				pass
 			else:
 				try:
-					ans = abs(int(ans) % MAX_NUM)
+					answer = abs(int(answer) % MAX_NUM)
 				except Exception:
 					ret.update({"status":INVALID_TYPE})
 					return ret
-			self.positon = api.run_task(self.handler,self.positon,ans,b"")
+			response = api.run_task(self.handler,self.positon,answer,b"")
 		else:
-			if isinstance(ans,str):
-				ans = ans.encode()
+			if isinstance(answer,str):
+				answer = answer.encode()
 			else:
-				ans = str(ans).encode()
-			self.positon = api.run_task(self.handler,self.positon,0,ans)
+				answer = str(answer).encode()
+			response = api.run_task(self.handler,self.positon,0,answer)
+		self.positon = response.next
+		ret.update({"explanation":response.explanation})
 		if self.positon == END_EXEC:
 			ret.update({"status":END_EXEC})
 		else:
@@ -292,25 +319,27 @@ class run_quiz:
 
 
 
-# DEBUG test below
+# DEBUG tests below
 
 def iterate(data):
+	number = 1
 	offset = data.handler.contents.next
+	print("Title : [ {} ]\n".format(data.handler.contents.data.question.decode()))
 	while offset:
-		print(offset.contents.data.question.decode())
+		print("{}.".format(number),offset.contents.data.question.decode())
 		if offset.contents.data.type == MULTIPLE_CHOICE:
 			for i in range(offset.contents.data.number):
 				link = offset.contents.data.answer.choices[i].link
 				choice = offset.contents.data.answer.choices[i].choice.decode()
-				print(i+1,"--> ",link,"--> ",end="")
-				print(choice)
+				explanation = offset.contents.data.answer.choices[i].explanation.decode()
+				print("({}) \t[ {} ]\n\t[ {} ]\n".format(link,choice,explanation))
 				i += 1
 		else:
 			correct = offset.contents.data.answer.keyword.correct
 			incorrect = offset.contents.data.answer.keyword.incorrect
 			keyword = offset.contents.data.answer.keyword.word.decode()
-			print("correct = ",correct)
-			print("incorrect = ",incorrect)
-			print("keyword = ",keyword)
-		print()
+			explanation = offset.contents.data.answer.keyword.explanation.decode()
+			print("({}) ({}) [ {} ]\n\t[ {} ]".format(correct,incorrect,keyword,explanation))
+		print("\n")
 		offset = offset.contents.next
+		number += 1
