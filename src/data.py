@@ -234,10 +234,6 @@ class edit_quiz:
 		self.default_type = def_type
 		self.handler.contents.data.type = self.default_type
 		return 0
-
-
-### new feature
-
 	def add_image(self,path,image_name):
 		if self.name == b"":
 			# project is not saved yet
@@ -252,10 +248,6 @@ class edit_quiz:
 			return 1
 		img_name = ("i/" + image_name).replace("..","").encode()
 		return api.delete_file(self.name,img_name)
-
-### end new feature
-
-
 	def save(self,name=None,cmpl=0):
 		if name not in ("",None):
 			self.name = str(name).encode()
