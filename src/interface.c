@@ -146,10 +146,11 @@ struct result run_task(task *exec,unsigned int position,int choice,unsigned char
 	type = exec[position].type;
 	if(type==MULTIPLE_CHOICE){
 		if(!exec[position].number){
+			// End task if the number of choices in a MCQ is 0
 			ret.next = END_EXEC;
 			return ret;
 		}
-		choice = abs((choice % exec[position].number) - 1);
+		choice = (choice-1) % exec[position].number;
 		ret.next = exec[position].answer.choices[choice].link;
 		ret.explanation = exec[position].answer.choices[choice].explanation;
 	}
@@ -224,6 +225,7 @@ int edit_task(edit_list *init,int cmd,...){
 			if(cmd!=_DELETE_CHOICE){
 				ans = va_arg(valist,answer*);
 			}
+			;
 			unsigned int q_index = va_arg(valist,unsigned int);
 			int c_index = abs(va_arg(valist,int));
 			edit_list *offset = seek(init,q_index);
