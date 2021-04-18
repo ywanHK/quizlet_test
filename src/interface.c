@@ -225,7 +225,6 @@ int edit_task(edit_list *init,int cmd,...){
 			if(cmd!=_DELETE_CHOICE){
 				ans = va_arg(valist,answer*);
 			}
-			;
 			unsigned int q_index = va_arg(valist,unsigned int);
 			int c_index = abs(va_arg(valist,int));
 			edit_list *offset = seek(init,q_index);
