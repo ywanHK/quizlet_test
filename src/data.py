@@ -1,4 +1,5 @@
 from ctypes import *
+import re
 
 MAX_NUM = 400000
 END_EXEC = 0xffffff00
@@ -101,16 +102,18 @@ api.run_task.restype = result
 # self.name is the name of the .gt file
 class edit_quiz:
 	def __init__(self,description="",file="",default=FILL_BLANK):
-		self.initial = edt()
-		self.handler = pointer(self.initial)
+		self.handler = pointer(edt())
 		self.default_type = default
+		self.name = b"" # Name of the archive
 		if file=="":
 			if description=="":
 				pass
 			else:
-				self.initial.data.question = description.encode()
+				self.handler.contents.data.question = description.encode()
 		else:
 			api.edit_task(self.handler,C_READ,file.encode(),0)
+			self.name = file.encode()
+		self.handler.contents.data.type = self.default_type
 	def count(self):
 		return api.count(self.handler)
 	def seek(self,index,mode="content"):
@@ -229,25 +232,51 @@ class edit_quiz:
 		if def_type not in [MULTIPLE_CHOICE,FILL_BLANK]:
 			return 1
 		self.default_type = def_type
+		self.handler.contents.data.type = self.default_type
 		return 0
-	def save(self,name,cmpl=0):
-		if name=="":
+
+
+### new feature
+
+	def add_image(self,path,image_name):
+		if self.name == b"":
+			# project is not saved yet
 			return 1
-		f = name.encode()
-		if api.edit_task(self.handler,C_WRITE,f,cmpl):
-			status = api.create(f)
+		with open(path,"rb") as fp:
+			contents = fp.read()
+		img_name = ("i/" + image_name).replace("..","").encode()
+		return api.write_to_file(self.name,img_name,contents,len(contents))
+	def delete_image(self,image_name):
+		if self.name == b"":
+			# project is not saved yet
+			return 1
+		img_name = ("i/" + image_name).replace("..","").encode()
+		return api.delete_file(self.name,img_name)
+
+### end new feature
+
+
+	def save(self,name=None,cmpl=0):
+		if name not in ("",None):
+			self.name = str(name).encode()
+		if self.name == b"":
+			return 1
+		if api.edit_task(self.handler,C_WRITE,self.name,cmpl):
+			status = api.create(self.name)
 			if status:
 				return status
-			return api.edit_task(self.handler,C_WRITE,f,cmpl)
+			return api.edit_task(self.handler,C_WRITE,self.name,cmpl)
 		return 0
+
 
 
 # run_task returns struct result
 # task is a the first element of a linked-list
 # handler is an array allocated by calloc()
 class run_quiz:
-	def __init__(self,file="",task=None):
+	def __init__(self,file="",task=None,gui_enabled=False):
 		self.positon = 1
+		self.gui_enabled = gui_enabled
 		if file!="":
 			information = api.read_from_file(file.encode(),NAME)
 			if information.error != 0:
@@ -284,38 +313,49 @@ class run_quiz:
 		else:
 			q.update({"status":EMPTY_SET})
 		return q
-	def nextq(self,answer):
+	def nextq(self,response):
 		if self.positon == END_EXEC or self.positon > self.number:
 			return {"status":END_EXEC}
 		qtype = self.handler[self.positon].type
 		ret = {}
 		if qtype == MULTIPLE_CHOICE:
-			if isinstance(answer,int):
+			if isinstance(response,int):
 				pass
 			else:
 				try:
-					answer = abs(int(answer) % MAX_NUM)
+					response = abs(int(response))
 				except Exception:
 					ret.update({"status":INVALID_TYPE})
 					return ret
-			response = api.run_task(self.handler,self.positon,answer,b"")
+			outcome = api.run_task(self.handler,self.positon,response,b"")
 		else:
-			if isinstance(answer,str):
-				answer = answer.encode()
+			if isinstance(response,str):
+				response = response.encode()
 			else:
-				answer = str(answer).encode()
-			response = api.run_task(self.handler,self.positon,0,answer)
-		self.positon = response.next
-		ret.update({"explanation":response.explanation})
+				response = str(response).encode()
+			outcome = api.run_task(self.handler,self.positon,0,response)
+		self.positon = outcome.next
 		if self.positon == END_EXEC:
 			ret.update({"status":END_EXEC})
 		else:
 			ret = self.format(self.handler[self.positon])
 			ret.update({"status":0})
+		ret.update({"explanation":outcome.explanation})
 		return ret
 	def finalize(self):
 		self.positon = 1
 		api.finish(self.handler)
+
+
+
+def parse_image(text):
+	image_list = [x.group().replace("..","") for x in re.finditer(r"\<i\/(.*?)\>",text)]
+	temp = re.sub(r"\<i\/(.*?)\>","<img>",text.replace("<img>","")).split("<img>")
+	final_list = []
+	for i in range(len(temp)-1):
+		final_list.append(temp[i])
+		final_list.append(image_list[i])
+	return final_list
 
 
 
