@@ -262,14 +262,26 @@ class edit_quiz:
 
 
 
+def get_image(text):
+	if isinstance(text,bytes):
+		text = text.decode()
+	return re.split(r"(\<i\/.*?\>)",text)
+def get_image_content(obj,path):
+	if obj.name in ("",None):
+		return False
+	content = api.read_from_file(obj.name,path[1:-1])
+	return cast(content.content,c_char_p)
+
+
 # run_task returns struct result
 # task is a the first element of a linked-list
 # handler is an array allocated by calloc()
+# path of image is always type bytes
 class run_quiz:
 	def __init__(self,file="",task=None,gui_enabled=False):
 		self.positon = 1
 		self.gui_enabled = gui_enabled
-		if file!="":
+		if file not in ("",None):
 			information = api.read_from_file(file.encode(),NAME)
 			if information.error != 0:
 				err = "Can't open file : {}".format(information.error)
@@ -277,30 +289,45 @@ class run_quiz:
 			self.handler = cast(information.content,POINTER(task_t))
 			if not self.handler: # maybe content can be NULL
 				raise Exception("Invalid file format")
+			self.name = file.encode()
 		elif task is not None:
 			self.handler = api.mem_convert(task.handler)
 			if not self.handler:
 				raise Exception("Memory allocation failed")
+			self.name = task.name
 		else:
 			raise Exception("No parameters")
 		self.number = self.handler[0].number
 	@staticmethod
-	def format(data):
-		qtype = data.type
+	def format(enabled,data):
 		entry = {}
-		qn = data.question.decode()
-		if qtype == FILL_BLANK:
-			entry.update({qn:None})
-		elif qtype == MULTIPLE_CHOICE:
-			entry.update({qn:[]})
-			for i in range(data.number):
-				entry[qn].append(data.answer.choices[i].choice.decode())
+		qtype = data.type
+		if enabled:
+			entry.update({
+				"question":get_image(data.question),
+				"choices":[],
+			})
+		else:
+			entry.update({
+				"question":[data.question.decode()],
+				"choices":[],
+			})
+		if qtype == MULTIPLE_CHOICE:
+			if enabled:
+				for i in range(data.number):
+					entry["choices"].append(get_image(data.answer.choices[i].choice))
+			else:
+				for i in range(data.number):
+					entry["choices"].append([data.answer.choices[i].choice.decode()])
 		return entry
+
+
+
 	def initialize(self):
 		api.safe_check(self.handler,self.number,1)
 		q = {}
 		if self.number > 0:
-			q.update(self.format(self.handler[self.positon]))
+			q.update(self.format(self.gui_enabled,self.handler[self.positon]))
 			q.update({"status":0})
 		else:
 			q.update({"status":EMPTY_SET})
@@ -330,24 +357,17 @@ class run_quiz:
 		if self.positon == END_EXEC:
 			ret.update({"status":END_EXEC})
 		else:
-			ret = self.format(self.handler[self.positon])
+			ret = self.format(self.gui_enabled,self.handler[self.positon])
 			ret.update({"status":0})
-		ret.update({"explanation":outcome.explanation})
+		if self.gui_enabled:
+			ret.update({"explanation":get_image(outcome.explanation)})
+		else:
+			ret.update({"explanation":[outcome.explanation.decode()]})
 		return ret
 	def finalize(self):
 		self.positon = 1
 		api.finish(self.handler)
 
-
-
-def parse_image(text):
-	image_list = [x.group().replace("..","") for x in re.finditer(r"\<i\/(.*?)\>",text)]
-	temp = re.sub(r"\<i\/(.*?)\>","<img>",text.replace("<img>","")).split("<img>")
-	final_list = []
-	for i in range(len(temp)-1):
-		final_list.append(temp[i])
-		final_list.append(image_list[i])
-	return final_list
 
 
 
