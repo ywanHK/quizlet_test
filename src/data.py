@@ -265,11 +265,15 @@ class edit_quiz:
 def get_image(text):
 	if isinstance(text,bytes):
 		text = text.decode()
-	return re.split(r"(\<i\/.*?\>)",text)
+	temp = re.split(r"(\<i\/.*?\>)",text)
+	for i in range(len(temp)):
+		if temp[i][:3] == "<i/" and temp[i][-1] == ">":
+			temp[i] = temp[i].encode()
+	return temp
 def get_image_content(obj,path):
 	if obj.name in (b"","",None):
 		return False
-	content = api.read_from_file(obj.name,path[1:-1])
+	content = api.read_from_file(obj.name,path[3:-1])
 	return cast(content.content,c_char_p)
 
 
@@ -320,9 +324,6 @@ class run_quiz:
 				for i in range(data.number):
 					entry["choices"].append([data.answer.choices[i].choice.decode()])
 		return entry
-
-
-
 	def initialize(self):
 		api.safe_check(self.handler,self.number,1)
 		q = {}
