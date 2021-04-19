@@ -267,7 +267,7 @@ def get_image(text):
 		text = text.decode()
 	return re.split(r"(\<i\/.*?\>)",text)
 def get_image_content(obj,path):
-	if obj.name in ("",None):
+	if obj.name in (b"","",None):
 		return False
 	content = api.read_from_file(obj.name,path[1:-1])
 	return cast(content.content,c_char_p)
